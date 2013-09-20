@@ -53,7 +53,7 @@ hashtaglikelimit = 100
 
 hashtags = ["outfit","jeans","short","clothes","dress","dresses","swag","smile","fashion","mode","instalike","girly","ootd","ootn","selfie","style","stylee","pretty","nice","instacool","cheveux","ciel","beauty","beaute","famille","bella","look","lookboot","tenuedujour","tenue","moi","soldes","shopping","shop","clothing","zara","abercrombie","fitch","hollister"]
 
-comments = ["How cute! <3\n\nxoxo",
+comments = ["How cute! <3\nxoxo",
             "Love it!"]
 
 ##### NO NEED TO EDIT BELOW THIS LINE
@@ -163,9 +163,14 @@ def comment():
             nextpage = "http://web.stagram.com"+nextpagelink[0] if len(nextpagelink) > 0 else False
 
             commentdata = re.findall(ur"<textarea name=\"message\" cols=\"50\" rows=\"7\" id=\"textarea_([0-9]+_[0-9]+)\"", curlData)
-            for commentid in commentdata:
-                print "Posting comment on photo id #" + commentid + "..."
-                postdata = 'messageid=' + commentid + '&message=' + comments[random.randint(0, len(comments) - 1)] + '&t=' + str(random.randint(1000, 9999))
+            userdata = re.findall(ur"firstinfo clearfix\">\n<strong><a href=\"\/n\/([^\"]+)\/\"", curlData)
+
+            pairs = zip(commentdata, userdata)
+
+            for commentid, username in pairs:
+                print "Posting comment on photo id " + commentid + "..."
+                quote = '%40' + username + ' ' if random.randint(0, 1) == 1 else ''
+                postdata = 'messageid=' + commentid + '&message=' + quote + comments[random.randint(0, len(comments) - 1)] + '&t=' + str(random.randint(1000, 9999))
                 buf = cStringIO.StringIO()
                 c = pycurl.Curl()
                 c.setopt(pycurl.URL, "http://web.stagram.com/post_comment/")
@@ -192,7 +197,7 @@ def comment():
                     if sleeptimer > 0:
                         time.sleep(sleeptimer)
                 else:
-                    print "Failed. Sleeping for one minute..."
+                    print "Failed:" + response + "\nSleeping for one minute..."
                     time.sleep(60)
 
 def like():
