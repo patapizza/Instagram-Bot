@@ -35,6 +35,7 @@ import cStringIO
 import re
 import random
 import time
+import sys
 
 ##### EDIT THESE BELOW
 
@@ -49,7 +50,11 @@ sleeptimer = 5
 hashtaglikelimit = 100
 
 #your list of hashtags
-hashtags = ["love","instagood","me","cute","photooftheday","tbt","instamood","iphonesia","picoftheday","igers","girl","beautiful","instadaily","tweegram","summer","instagramhub","follow","bestoftheday","iphoneonly","igdaily","happy","picstitch","webstagram","fashion","sky","nofilter","jj","followme","fun","smile","sun","pretty","instagramers","food","like","friends","lol","hair","nature","swag","onedirection","bored","funny","life","cool","beach","blue","dog","pink","art","hot","my","family","sunset","photo","versagram","instahub","amazing","statigram","girls","cat","awesome","throwbackthursday","repost","clouds","baby","red","music","party","black","instalove","night","textgram","followback","all_shots","jj_forum","igaddict","yummy","white","yum","bestfriend","green","school","likeforlike","eyes","sweet","instago","tagsforlikes","style","harrystyles","2012","foodporn","beauty","ignation","niallhoran","i","boy","nice","halloween","instacollage"]
+
+hashtags = ["outfit","jeans","short","clothes","dress","dresses","swag","smile","fashion","mode","instalike","girly","ootd","ootn","selfie","style","stylee","pretty","nice","instacool","cheveux","ciel","beauty","beaute","famille","bella","look","lookboot","tenuedujour","tenue","moi","soldes","shopping","shop","clothing","zara","abercrombie","fitch","hollister"]
+
+comments = ["How cute! <3\n\nxoxo",
+            "Love it!"]
 
 ##### NO NEED TO EDIT BELOW THIS LINE
 
@@ -130,7 +135,65 @@ def login():
     curlData = buf.getvalue()
     buf.close()
 
+def comment():
+    commentcount = 0
+    for tag in hashtags:
+        hashtagcomments = 0
+        nextpage = "http://web.stagram.com/tag/" + tag + "/?vm=list"
+        while nextpage != False:
+            print "Retrieving page " + nextpage + "..."
+            buf = cStringIO.StringIO()
+            c = pycurl.Curl()
+            c.setopt(pycurl.URL, nextpage)
+            c.setopt(pycurl.COOKIEFILE, "pycookie.txt")
+            c.setopt(pycurl.COOKIEJAR, "pycookie.txt")
+            c.setopt(pycurl.WRITEFUNCTION, buf.write)
+            c.setopt(pycurl.FOLLOWLOCATION, 1)
+            c.setopt(pycurl.ENCODING, "")
+            c.setopt(pycurl.SSL_VERIFYPEER, 0)
+            c.setopt(pycurl.SSL_VERIFYHOST, 0)
+            useragent = random.choice(browsers) + str(random.randrange(1,9)) + "." + str(random.randrange(0,50)) + " (" + random.choice(operatingsystems) + "; " + random.choice(operatingsystems) + "; rv:" + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + ")"
+            c.setopt(pycurl.USERAGENT, useragent)
+            c.perform()
+            curlData = buf.getvalue()
+            buf.close()
+            print "...done."
 
+            nextpagelink = re.findall(ur"<a href=\"([^\"]*)\" rel=\"next\">Earlier<\/a>",curlData)
+            nextpage = "http://web.stagram.com"+nextpagelink[0] if len(nextpagelink) > 0 else False
+
+            commentdata = re.findall(ur"<textarea name=\"message\" cols=\"50\" rows=\"7\" id=\"textarea_([0-9]+_[0-9]+)\"", curlData)
+            for commentid in commentdata:
+                print "Posting comment on photo id #" + commentid + "..."
+                postdata = 'messageid=' + commentid + '&message=' + comments[random.randint(0, len(comments) - 1)] + '&t=' + str(random.randint(1000, 9999))
+                buf = cStringIO.StringIO()
+                c = pycurl.Curl()
+                c.setopt(pycurl.URL, "http://web.stagram.com/post_comment/")
+                c.setopt(pycurl.COOKIEFILE, "pycookie.txt")
+                c.setopt(pycurl.COOKIEJAR, "pycookie.txt")
+                c.setopt(pycurl.WRITEFUNCTION, buf.write)
+                c.setopt(pycurl.FOLLOWLOCATION, 1)
+                c.setopt(pycurl.ENCODING, "")
+                c.setopt(pycurl.SSL_VERIFYPEER, 0)
+                c.setopt(pycurl.SSL_VERIFYHOST, 0)
+                useragent = random.choice(browsers) + str(random.randrange(1,9)) + "." + str(random.randrange(0,50)) + " (" + random.choice(operatingsystems) + "; " + random.choice(operatingsystems) + "; rv:" + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + ")"
+                c.setopt(pycurl.USERAGENT, useragent)
+                c.setopt(pycurl.POST, 1)
+                c.setopt(pycurl.POSTFIELDS, postdata)
+                c.setopt(pycurl.POSTFIELDSIZE, len(postdata))
+                c.perform()
+                response = buf.getvalue()
+                buf.close()
+                print "...done."
+                if re.match("\{\"status\":\"OK\",\"message\":\"Success.\"", response) != None:
+                    commentcount += 1
+                    hashtagcomments += 1
+                    print "You commented on #" + tag + "image " + commentid + "! Comment count: " + str(commentcount)
+                    if sleeptimer > 0:
+                        time.sleep(sleeptimer)
+                else:
+                    print "Failed. Sleeping for one minute..."
+                    time.sleep(60)
 
 def like():
     likecount = 0
@@ -204,9 +267,9 @@ def like():
                             print "Your account has been rate limited. Sleeping on "+tag+" for "+str(sleepcount)+" minute(s). Liked "+str(likecount)+" photo(s)..."
                             time.sleep(60)
 
-def main():
-    login()
-    like()
-
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 2 or (sys.argv[1] != "comment" and sys.argv[1] != "like"):
+        print "Usage: python webstagrambot.py {comment,like}"
+    else:
+        login()
+        comment() if sys.argv[1] == "comment" else like()
