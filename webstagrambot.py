@@ -30,6 +30,7 @@ v1.0 updates:
 '''
 
 import os
+import psycopg2
 import pycurl
 import cStringIO
 import re
@@ -56,10 +57,23 @@ hashtags = ["outfit","jeans","short","clothes","dress","dresses","swag","smile",
 comments = ["How cute! <3\nxoxo",
             "Love it!"]
 
+spam_comments = ["famest.com",
+                 "Join us on famest.com!"]
+
 ##### NO NEED TO EDIT BELOW THIS LINE
 
 browsers = ["IE ","Mozilla/","Gecko/","Opera/","Chrome/","Safari/"]
 operatingsystems = ["Windows","Linux","OS X","compatible","Macintosh","Intel"]
+
+def connect(params):
+    con = None
+    try:
+        print('--- Connecting...')
+        con = psycopg2.connect(params)
+        print('--- Connected.')
+    except psycopg2.DatabaseError as e:
+        print('Error {}'.format(e))
+    return con
 
 def login():
     try:
@@ -135,7 +149,16 @@ def login():
     curlData = buf.getvalue()
     buf.close()
 
-def comment():
+def comment(mode):
+    params = "dbname=db host=localhost port=5432 user=user password=password"
+
+    con = connect(params)
+    if not con:
+        sys.exit(1)
+    cur = con.cursor()
+    cur.execute('SELECT * FROM users')
+    seen = [name for uid, name in cur.fetchall()]
+
     commentcount = 0
     for tag in hashtags:
         hashtagcomments = 0
@@ -164,13 +187,30 @@ def comment():
 
             commentdata = re.findall(ur"<textarea name=\"message\" cols=\"50\" rows=\"7\" id=\"textarea_([0-9]+_[0-9]+)\"", curlData)
             userdata = re.findall(ur"firstinfo clearfix\">\n<strong><a href=\"\/n\/([^\"]+)\/\"", curlData)
+            allcomments = re.findall(ur"<ul class=\"[0-9]+_[0-9]+\">(((?!<\/ul>)[\s\S])*)<\/ul>", curlData)
 
-            pairs = zip(commentdata, userdata)
+            triplets = zip(commentdata, userdata, [a for a,b in allcomments])
 
-            for commentid, username in pairs:
+            for commentid, username, photocomments in triplets:
+                if mode == "spam":
+                    if username in seen:
+                        print "User " + username + " already seen; skipping."
+                        continue
+                    else:
+                        cur.execute("""INSERT INTO users (username) VALUES (%s);""", (username,))
+                        con.commit()
+                        seen.append(username)
+                posters = re.findall(ur"<a href=\"\/n\/([^\"]+)\/\"", photocomments)
+                if "famestapp" in posters:
+                    print "Already posted on photo " + commentid + "; skipping."
+                    continue
                 print "Posting comment on photo id " + commentid + "..."
+                # always quote user
+                # quote = '%40' + username
+                # 50% chances of quoting user at the beginning of comment
                 quote = '%40' + username + ' ' if random.randint(0, 1) == 1 else ''
-                postdata = 'messageid=' + commentid + '&message=' + quote + comments[random.randint(0, len(comments) - 1)] + '&t=' + str(random.randint(1000, 9999))
+                message = comments[random.randint(0, len(comments) - 1)] if mode == "nospam" else spam_comments[random.randint(0, len(spam_comments) - 1)]
+                postdata = 'messageid=' + commentid + '&message=' + quote + message + '&t=' + str(random.randint(1000, 9999))
                 buf = cStringIO.StringIO()
                 c = pycurl.Curl()
                 c.setopt(pycurl.URL, "http://web.stagram.com/post_comment/")
@@ -199,6 +239,7 @@ def comment():
                 else:
                     print "Failed:" + response + "\nSleeping for one minute..."
                     time.sleep(60)
+    con.close()
 
 def like():
     likecount = 0
@@ -273,8 +314,9 @@ def like():
                             time.sleep(60)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or (sys.argv[1] != "comment" and sys.argv[1] != "like"):
-        print "Usage: python webstagrambot.py {comment,like}"
+    if len(sys.argv) < 2 or (not (sys.argv[1] == "comment" and len(sys.argv) == 3 and (sys.argv[2] == "spam" or sys.argv[2] == "nospam")) and sys.argv[1] != "like"):
+        print "Usage: python webstagrambot.py comment spam|nospam"
+        print "Usage: python webstagrambot.py like"
     else:
         login()
-        comment() if sys.argv[1] == "comment" else like()
+        comment(sys.argv[2]) if sys.argv[1] == "comment" else like()
