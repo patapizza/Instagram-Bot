@@ -44,6 +44,8 @@ import sys
 username = "username"
 password = "password"
 
+MAX_TRIES = 3
+
 #set a sleep timer between each like.  Set value to 0 if you don't want it to sleep at all
 sleeptimer = 5
 
@@ -52,7 +54,7 @@ hashtaglikelimit = 100
 
 #your list of hashtags
 
-hashtags = ["outfit","jeans","short","clothes","dress","dresses","swag","smile","fashion","mode","instalike","girly","ootd","ootn","selfie","style","stylee","pretty","nice","instacool","cheveux","ciel","beauty","beaute","famille","bella","look","lookboot","tenuedujour","tenue","moi","soldes","shopping","shop","clothing","zara","abercrombie","fitch","hollister"]
+hashtags = ["ootd","outfit","jeans","short","clothes","dress","dresses","swag","smile","fashion","mode","instalike","girly","ootd","ootn","selfie","style","stylee","pretty","nice","instacool","cheveux","ciel","beauty","beaute","famille","bella","look","lookboot","tenuedujour","tenue","moi","soldes","shopping","shop","clothing","zara","abercrombie","fitch","hollister"]
 
 comments = ["How cute! <3\nxoxo",
             "Love it!"]
@@ -192,53 +194,58 @@ def comment(mode):
             triplets = zip(commentdata, userdata, [a for a,b in allcomments])
 
             for commentid, username, photocomments in triplets:
-                if mode == "spam":
-                    if username in seen:
-                        print "User " + username + " already seen; skipping."
+                tries = 0
+                while 1:
+                    if mode == "spam":
+                        if username in seen:
+                            print "User " + username + " already seen; skipping."
+                            continue
+                        else:
+                            cur.execute("""INSERT INTO users (username) VALUES (%s);""", (username,))
+                            con.commit()
+                            seen.append(username)
+                    posters = re.findall(ur"<a href=\"\/n\/([^\"]+)\/\"", photocomments)
+                    if "famestapp" in posters:
+                        print "Already posted on photo " + commentid + "; skipping."
                         continue
+                    print "Posting comment on photo id " + commentid + "..."
+                    # always quote user
+                    # quote = '%40' + username
+                    # 50% chances of quoting user at the beginning of comment
+                    quote = '%40' + username + ' ' if random.randint(0, 1) == 1 else ''
+                    message = comments[random.randint(0, len(comments) - 1)] if mode == "nospam" else spam_comments[random.randint(0, len(spam_comments) - 1)]
+                    postdata = 'messageid=' + commentid + '&message=' + quote + message + '&t=' + str(random.randint(1000, 9999))
+                    buf = cStringIO.StringIO()
+                    c = pycurl.Curl()
+                    c.setopt(pycurl.URL, "http://web.stagram.com/post_comment/")
+                    c.setopt(pycurl.COOKIEFILE, "pycookie.txt")
+                    c.setopt(pycurl.COOKIEJAR, "pycookie.txt")
+                    c.setopt(pycurl.WRITEFUNCTION, buf.write)
+                    c.setopt(pycurl.FOLLOWLOCATION, 1)
+                    c.setopt(pycurl.ENCODING, "")
+                    c.setopt(pycurl.SSL_VERIFYPEER, 0)
+                    c.setopt(pycurl.SSL_VERIFYHOST, 0)
+                    useragent = random.choice(browsers) + str(random.randrange(1,9)) + "." + str(random.randrange(0,50)) + " (" + random.choice(operatingsystems) + "; " + random.choice(operatingsystems) + "; rv:" + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + ")"
+                    c.setopt(pycurl.USERAGENT, useragent)
+                    c.setopt(pycurl.POST, 1)
+                    c.setopt(pycurl.POSTFIELDS, postdata)
+                    c.setopt(pycurl.POSTFIELDSIZE, len(postdata))
+                    c.perform()
+                    response = buf.getvalue()
+                    buf.close()
+                    tries += 1
+                    if re.match("\{\"status\":\"OK\",\"message\":\"Success.\"", response) != None:
+                        commentcount += 1
+                        hashtagcomments += 1
+                        print "You commented on #" + tag + " image " + commentid + "! Comment count: " + str(commentcount)
+                        if sleeptimer > 0:
+                            time.sleep(sleeptimer)
+                        break
                     else:
-                        cur.execute("""INSERT INTO users (username) VALUES (%s);""", (username,))
-                        con.commit()
-                        seen.append(username)
-                posters = re.findall(ur"<a href=\"\/n\/([^\"]+)\/\"", photocomments)
-                if "famestapp" in posters:
-                    print "Already posted on photo " + commentid + "; skipping."
-                    continue
-                print "Posting comment on photo id " + commentid + "..."
-                # always quote user
-                # quote = '%40' + username
-                # 50% chances of quoting user at the beginning of comment
-                quote = '%40' + username + ' ' if random.randint(0, 1) == 1 else ''
-                message = comments[random.randint(0, len(comments) - 1)] if mode == "nospam" else spam_comments[random.randint(0, len(spam_comments) - 1)]
-                postdata = 'messageid=' + commentid + '&message=' + quote + message + '&t=' + str(random.randint(1000, 9999))
-                buf = cStringIO.StringIO()
-                c = pycurl.Curl()
-                c.setopt(pycurl.URL, "http://web.stagram.com/post_comment/")
-                c.setopt(pycurl.COOKIEFILE, "pycookie.txt")
-                c.setopt(pycurl.COOKIEJAR, "pycookie.txt")
-                c.setopt(pycurl.WRITEFUNCTION, buf.write)
-                c.setopt(pycurl.FOLLOWLOCATION, 1)
-                c.setopt(pycurl.ENCODING, "")
-                c.setopt(pycurl.SSL_VERIFYPEER, 0)
-                c.setopt(pycurl.SSL_VERIFYHOST, 0)
-                useragent = random.choice(browsers) + str(random.randrange(1,9)) + "." + str(random.randrange(0,50)) + " (" + random.choice(operatingsystems) + "; " + random.choice(operatingsystems) + "; rv:" + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + "." + str(random.randrange(1,9)) + ")"
-                c.setopt(pycurl.USERAGENT, useragent)
-                c.setopt(pycurl.POST, 1)
-                c.setopt(pycurl.POSTFIELDS, postdata)
-                c.setopt(pycurl.POSTFIELDSIZE, len(postdata))
-                c.perform()
-                response = buf.getvalue()
-                buf.close()
-                print "...done."
-                if re.match("\{\"status\":\"OK\",\"message\":\"Success.\"", response) != None:
-                    commentcount += 1
-                    hashtagcomments += 1
-                    print "You commented on #" + tag + "image " + commentid + "! Comment count: " + str(commentcount)
-                    if sleeptimer > 0:
-                        time.sleep(sleeptimer)
-                else:
-                    print "Failed:" + response + "\nSleeping for one minute..."
-                    time.sleep(60)
+                        print "Try #" + str(tries) + " failed:" + response + "\nSleeping for one minute..."
+                        time.sleep(60)
+                        if tries == MAX_TRIES:
+                            break
     con.close()
 
 def like():
