@@ -1,0 +1,21 @@
+PostgreSQL usage
+---
+Install PostgreSQL; launch server.
+
+Creating database:
+$ createdb -h localhost -e <dbname>
+
+Entering database command line interface:
+$ psql -h localhost <dbname>
+
+Creating table:
+<dbname>=# create sequence users_seq_id;
+<dbname>=# create table users (id integer not null default nextval('users_id_seq'), username text, primary key (id));
+<dbname>=# alter sequence users_seq_id owned by users.id;
+
+Exiting database command line interface:
+<dbname>=# \q
+
+Into the script file:
+    Edit lines #44 and #45 using Instagram account credentials;
+    Update db, user and password values on line #155.
